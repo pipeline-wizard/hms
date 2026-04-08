@@ -402,7 +402,7 @@ export default function SettingsPage() {
           <Settings className="h-5 w-5 text-teal-700" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
+          <h1 className="page-title">Settings</h1>
           <p className="text-sm text-slate-500">Manage clinic configuration, templates, and users</p>
         </div>
       </div>

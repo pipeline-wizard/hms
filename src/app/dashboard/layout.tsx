@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { useKeyboardShortcuts } from "@/lib/use-keyboard-shortcuts";
 import { Building2 } from "lucide-react";
 
 const pageTitles: Record<string, string> = {
@@ -32,6 +33,9 @@ export default function DashboardLayout({
       redirect("/login");
     },
   });
+
+  // Global keyboard shortcuts
+  useKeyboardShortcuts();
 
   const title = useMemo(() => {
     const exactMatch = pageTitles[pathname];

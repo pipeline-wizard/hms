@@ -194,7 +194,7 @@ export default function BillingPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Billing</h1>
+          <h1 className="page-title">Billing</h1>
           <p className="text-sm text-slate-500">
             Manage invoices and payments
           </p>

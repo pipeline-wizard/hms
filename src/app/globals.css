@@ -43,6 +43,31 @@
   .animate-in {
     animation: fade-in 0.3s ease-out;
   }
+
+  /* Page titles */
+  .page-title {
+    @apply text-2xl font-bold tracking-tight text-foreground;
+  }
+
+  /* Section headers */
+  .section-title {
+    @apply text-base font-semibold text-foreground;
+  }
+
+  /* Clickable icon buttons */
+  .icon-btn {
+    @apply rounded-md p-1.5 transition-colors hover:bg-muted active:bg-muted/80;
+  }
+}
+
+/* Interactive icon hover */
+button svg,
+a svg {
+  transition: opacity 0.15s ease;
+}
+button:hover svg,
+a:hover svg {
+  opacity: 0.8;
 }
 
 /* Custom scrollbar */

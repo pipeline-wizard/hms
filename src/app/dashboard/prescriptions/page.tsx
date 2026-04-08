@@ -156,7 +156,7 @@ export default function PrescriptionsPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Prescriptions</h1>
+          <h1 className="page-title">Prescriptions</h1>
           <div className="flex items-center gap-2">
             <p className="text-sm text-slate-500">
               {total} prescription{total !== 1 ? "s" : ""} total
