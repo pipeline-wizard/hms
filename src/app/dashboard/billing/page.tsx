@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   Plus,
   Search,
@@ -10,6 +11,7 @@ import {
   Receipt,
   CheckCircle,
   IndianRupee,
+  Printer,
 } from "lucide-react";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface BillPatient {
   id: string;
@@ -67,7 +75,7 @@ const STATUS_TABS = [
 ];
 
 const statusBadgeClass: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-800 border-amber-200",
+  PENDING: "bg-amber-100 text-amber-900 border-amber-300 font-semibold",
   PAID: "bg-green-100 text-green-800 border-green-200",
   PARTIAL: "bg-blue-100 text-blue-800 border-blue-200",
   CANCELLED: "bg-red-100 text-red-800 border-red-200",
@@ -76,6 +84,10 @@ const statusBadgeClass: Record<string, string> = {
 export default function BillingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
+  const isDoctor = userRole === "DOCTOR";
+
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -114,7 +126,6 @@ export default function BillingPage() {
 
   const fetchSummary = useCallback(async () => {
     try {
-      // Fetch all paid bills for revenue
       const [paidRes, pendingRes, todayRes] = await Promise.all([
         fetch("/api/billing?status=PAID&limit=1000"),
         fetch("/api/billing?status=PENDING&limit=1000"),
@@ -156,11 +167,13 @@ export default function BillingPage() {
     fetchSummary();
   }, [fetchSummary]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPage(1);
-    fetchBills();
-  };
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const handleMarkAsPaid = async (id: string) => {
     if (!confirm("Mark this bill as paid?")) return;
@@ -191,230 +204,293 @@ export default function BillingPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="page-title">Billing</h1>
-          <p className="text-sm text-slate-500">
-            Manage invoices and payments
-          </p>
-        </div>
-        <Button onClick={() => router.push("/dashboard/billing/new")}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Bill
-        </Button>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <IndianRupee className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">
-                Total Revenue
-              </p>
-              <p className="text-2xl font-bold text-slate-900">
-                {formatCurrency(totalRevenue)}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
-              <IndianRupee className="h-6 w-6 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">
-                Pending Amount
-              </p>
-              <p className="text-2xl font-bold text-slate-900">
-                {formatCurrency(pendingAmount)}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-              <Receipt className="h-6 w-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Bills Today</p>
-              <p className="text-2xl font-bold text-slate-900">{billsToday}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="flex flex-wrap gap-2">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => {
-              setStatusFilter(tab.value);
-              setPage(1);
-            }}
-            className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-              statusFilter === tab.value
-                ? "bg-teal-600 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Search */}
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="Search by bill number or patient name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Button type="submit" variant="secondary">
-          Search
-        </Button>
-      </form>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
-            </div>
-          ) : bills.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-              <Receipt className="mb-4 h-12 w-12" />
-              <p className="text-lg font-medium">No bills found</p>
-              <p className="text-sm">Create a new bill to get started</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Bill #</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Patient</TableHead>
-                  <TableHead className="text-center">Items</TableHead>
-                  <TableHead className="text-right">Subtotal</TableHead>
-                  <TableHead className="text-right">Discount</TableHead>
-                  <TableHead className="text-right">Tax</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {bills.map((bill) => (
-                  <TableRow key={bill.id}>
-                    <TableCell className="font-medium">
-                      {bill.billNumber}
-                    </TableCell>
-                    <TableCell>{formatDate(bill.createdAt)}</TableCell>
-                    <TableCell>{bill.patient.name}</TableCell>
-                    <TableCell className="text-center">
-                      {bill.items.length}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(bill.subtotal)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(bill.discount)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(bill.taxAmount)}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {formatCurrency(bill.totalAmount)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={statusBadgeClass[bill.status]}
-                      >
-                        {bill.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="View"
-                          onClick={() =>
-                            router.push(`/dashboard/billing/${bill.id}`)
-                          }
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {bill.status === "PENDING" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Mark as Paid"
-                            onClick={() => handleMarkAsPaid(bill.id)}
-                          >
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Delete"
-                          onClick={() => handleDelete(bill.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
+    <TooltipProvider delayDuration={300}>
+      <div className="space-y-6">
+        {/* Page Header */}
         <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">
-            Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, total)} of{" "}
-            {total} bills
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
+          <div>
+            <h1 className="page-title">Billing</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage invoices and payments
+            </p>
+          </div>
+          <Button
+            className="bg-teal-600 hover:bg-teal-700"
+            onClick={() => router.push("/dashboard/billing/new")}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Bill
+          </Button>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Card className="cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5"
+                onClick={() => { setStatusFilter("PAID"); setPage(1); }}>
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100">
+                <IndianRupee className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Total Revenue
+                </p>
+                <p className="text-2xl font-bold">
+                  {formatCurrency(totalRevenue)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 border-amber-200"
+                onClick={() => { setStatusFilter("PENDING"); setPage(1); }}>
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-100">
+                <IndianRupee className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Pending Amount
+                </p>
+                <p className="text-2xl font-bold text-amber-700">
+                  {formatCurrency(pendingAmount)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-100">
+                <Receipt className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Bills Today
+                </p>
+                <p className="text-2xl font-bold">{billsToday}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filter Tabs + Search */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => {
+                  setStatusFilter(tab.value);
+                  setPage(1);
+                }}
+                className={cn(
+                  "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                  statusFilter === tab.value
+                    ? "bg-teal-600 text-white"
+                    : "bg-card text-muted-foreground hover:bg-muted border"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search bill # or patient..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
           </div>
         </div>
-      )}
-    </div>
+
+        {/* Table */}
+        <Card>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
+                  <p className="text-sm text-muted-foreground">Loading bills...</p>
+                </div>
+              </div>
+            ) : bills.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                  <Receipt className="h-8 w-8 text-muted-foreground/60" />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold">
+                  {search || statusFilter ? "No bills found" : "No bills yet"}
+                </h3>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                  {search
+                    ? "Try adjusting your search or filters."
+                    : "Create your first bill to start tracking payments."}
+                </p>
+                {!search && !statusFilter && (
+                  <Button
+                    className="mt-6 bg-teal-600 hover:bg-teal-700"
+                    onClick={() => router.push("/dashboard/billing/new")}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create First Bill
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Bill #</TableHead>
+                    <TableHead>Patient</TableHead>
+                    <TableHead className="hidden md:table-cell">Date</TableHead>
+                    <TableHead className="hidden lg:table-cell text-center">Items</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bills.map((bill) => (
+                    <TableRow
+                      key={bill.id}
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/dashboard/billing/${bill.id}`)}
+                    >
+                      <TableCell className="font-mono text-sm">
+                        {bill.billNumber}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{bill.patient.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {bill.patient.patientId}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                        {formatDate(bill.createdAt)}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center text-muted-foreground">
+                        {bill.items.length} item{bill.items.length !== 1 ? "s" : ""}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div>
+                          <p className="font-semibold">{formatCurrency(bill.totalAmount)}</p>
+                          {bill.discount > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              -{formatCurrency(bill.discount)} disc.
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={statusBadgeClass[bill.status]}
+                        >
+                          {bill.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div
+                          className="flex items-center justify-end gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => router.push(`/dashboard/billing/${bill.id}`)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>View invoice</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => window.open(`/dashboard/billing/${bill.id}`, "_blank")}
+                              >
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Print invoice</TooltipContent>
+                          </Tooltip>
+                          {bill.status === "PENDING" && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleMarkAsPaid(bill.id)}
+                                >
+                                  <CheckCircle className="h-4 w-4 text-green-600" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Mark as paid</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {!isDoctor && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={() => handleDelete(bill.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete bill</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, total)} of{" "}
+              {total} bills
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </TooltipProvider>
   );
 }
