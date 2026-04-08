@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(ssh sourav@20.124.200.175 \"curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/login\")",
+      "WebFetch(domain:20.124.200.175)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(ssh -o StrictHostKeyChecking=no -o BatchMode=yes claude@20.124.200.175 \"echo connected\")",
+      "Read(//c/Users/sopadhi/.ssh/**)",
+      "Bash(ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N \"\" -q)",
+      "Bash(ssh -o StrictHostKeyChecking=no claude@20.124.200.175 \"echo 'SSH Connected!'\")",
+      "Bash(ssh -o StrictHostKeyChecking=no claude@20.124.200.175 \"curl -s -o /dev/null -w 'Login: %{http_code}\\\\n' http://localhost:3000/login && curl -s -o /dev/null -w 'Register: %{http_code}\\\\n' http://localhost:3000/register && curl -s -o /dev/null -w 'Root redirect: %{http_code}\\\\n' http://localhost:3000/\")",
+      "Bash(ssh -o StrictHostKeyChecking=no claude@20.124.200.175)",
+      "Bash(ssh -o StrictHostKeyChecking=no claude@20.124.200.175 \"curl -s -X POST http://localhost:3000/api/auth/register -H 'Content-Type: application/json' -d '{\\\\\"name\\\\\":\\\\\"Dr. Debug\\\\\",\\\\\"email\\\\\":\\\\\"dr.debug@test.com\\\\\",\\\\\"password\\\\\":\\\\\"test123\\\\\",\\\\\"role\\\\\":\\\\\"DOCTOR\\\\\"}'\")",
+      "Bash(scp -o StrictHostKeyChecking=no \"C:/Users/sopadhi/Downloads/Projects/clinicflow-v2.tar.gz\" claude@20.124.200.175:~/)",
+      "Bash(ssh -o StrictHostKeyChecking=no claude@20.124.200.175 \"sudo pkill -f 'next dev' 2>/dev/null; sudo bash -c 'tar -xzf /home/claude/clinicflow-v2.tar.gz --strip-components=1 -C /root/clinicflow && ls /root/clinicflow/src/middleware.ts /root/clinicflow/src/app/onboarding/page.tsx /root/clinicflow/src/components/shared/patient-search.tsx /root/clinicflow/src/lib/api-utils.ts'\")",
+      "Bash(ssh -o StrictHostKeyChecking=no claude@20.124.200.175 \"sudo bash -c 'cd /root/clinicflow && git init && git config user.email \\\\\"deploy@clinicflow.com\\\\\" && git config user.name \\\\\"ClinicFlow Deploy\\\\\" && echo \\\\\"Git initialized\\\\\"'\")"
+    ]
+  }
+}

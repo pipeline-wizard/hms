@@ -1,0 +1,68 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AZURE_RESOURCE_GROUP: clinicflow-rg
+  IMAGE_NAME: clinicflow
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get ACR credentials
+        id: acr
+        run: |
+          ACR_NAME=$(az acr list -g ${{ env.AZURE_RESOURCE_GROUP }} --query "[0].name" -o tsv)
+          ACR_SERVER=$(az acr show -n $ACR_NAME --query loginServer -o tsv)
+          echo "acr_name=$ACR_NAME" >> $GITHUB_OUTPUT
+          echo "acr_server=$ACR_SERVER" >> $GITHUB_OUTPUT
+
+      - name: Login to ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ steps.acr.outputs.acr_server }}
+          username: ${{ steps.acr.outputs.acr_name }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${{ steps.acr.outputs.acr_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker build -t ${{ steps.acr.outputs.acr_server }}/${{ env.IMAGE_NAME }}:latest .
+          docker push ${{ steps.acr.outputs.acr_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ steps.acr.outputs.acr_server }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy to App Service
+        run: |
+          WEB_APP_NAME=$(az webapp list -g ${{ env.AZURE_RESOURCE_GROUP }} --query "[0].name" -o tsv)
+          az webapp config container set \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name $WEB_APP_NAME \
+            --container-image-name ${{ steps.acr.outputs.acr_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          az webapp restart \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name $WEB_APP_NAME
+
+      - name: Verify deployment
+        run: |
+          WEB_APP_URL=$(az webapp show -g ${{ env.AZURE_RESOURCE_GROUP }} -n $(az webapp list -g ${{ env.AZURE_RESOURCE_GROUP }} --query "[0].name" -o tsv) --query defaultHostName -o tsv)
+          echo "Deployed to: https://$WEB_APP_URL"
+          sleep 30
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://$WEB_APP_URL/login")
+          if [ "$STATUS" = "200" ]; then
+            echo "Deployment verified - login page returns 200"
+          else
+            echo "Warning: login page returned $STATUS"
+          fi

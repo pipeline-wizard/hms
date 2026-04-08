@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DOCTOR
+  RECEPTIONIST
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum BillStatus {
+  PENDING
+  PAID
+  PARTIAL
+  CANCELLED
+}
+
+enum PatientType {
+  OUTPATIENT
+  INPATIENT
+}
+
+enum AdmissionStatus {
+  ADMITTED
+  DISCHARGED
+  TRANSFERRED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  role          Role           @default(RECEPTIONIST)
+  phone         String?
+  specialization String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  prescriptions Prescription[]
+  admissions    Admission[]
+}
+
+model Patient {
+  id             String         @id @default(cuid())
+  patientId      String         @unique @default(cuid())
+  name           String
+  age            Int
+  gender         Gender
+  phone          String
+  email          String?
+  address        String?
+  bloodGroup     String?
+  allergies      String?
+  medicalHistory String?        @db.Text
+  patientType    PatientType    @default(OUTPATIENT)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  prescriptions  Prescription[]
+  bills          Bill[]
+  admissions     Admission[]
+}
+
+model Admission {
+  id              String          @id @default(cuid())
+  patientId       String
+  admittedBy      String
+  roomNumber      String?
+  bedNumber       String?
+  ward            String?
+  admissionDate   DateTime        @default(now())
+  dischargeDate   DateTime?
+  reason          String
+  status          AdmissionStatus @default(ADMITTED)
+  notes           String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  patient         Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  admittedByUser  User            @relation(fields: [admittedBy], references: [id])
+}
+
+model Prescription {
+  id         String              @id @default(cuid())
+  patientId  String
+  doctorId   String
+  diagnosis  String
+  notes      String?             @db.Text
+  vitals     Json?
+  templateId String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  patient    Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor     User                @relation(fields: [doctorId], references: [id])
+  template   PrescriptionTemplate? @relation(fields: [templateId], references: [id])
+  items      PrescriptionItem[]
+  bill       Bill?
+}
+
+model PrescriptionItem {
+  id             String       @id @default(cuid())
+  prescriptionId String
+  medicineName   String
+  dosage         String
+  frequency      String
+  duration       String
+  instructions   String?
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+}
+
+model PrescriptionTemplate {
+  id            String         @id @default(cuid())
+  name          String
+  description   String?
+  headerText    String?
+  footerText    String?
+  logoUrl       String?
+  accentColor   String         @default("#0891b2")
+  layout        String         @default("standard")
+  isDefault     Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  prescriptions Prescription[]
+}
+
+model Bill {
+  id             String      @id @default(cuid())
+  billNumber     String      @unique
+  prescriptionId String?     @unique
+  patientId      String
+  subtotal       Float
+  discount       Float       @default(0)
+  taxRate        Float       @default(0)
+  taxAmount      Float       @default(0)
+  totalAmount    Float
+  status         BillStatus  @default(PENDING)
+  paymentMethod  String?
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  prescription   Prescription? @relation(fields: [prescriptionId], references: [id])
+  patient        Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  items          BillItem[]
+}
+
+model BillItem {
+  id          String @id @default(cuid())
+  billId      String
+  description String
+  category    String @default("General")
+  quantity    Int    @default(1)
+  unitPrice   Float
+  amount      Float
+  bill        Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+}
+
+model ClinicSettings {
+  id             String   @id @default("default")
+  clinicName     String   @default("My Clinic")
+  address        String?
+  phone          String?
+  email          String?
+  website        String?
+  logoUrl        String?
+  specialty      String?
+  description    String?  @db.Text
+  registrationNo String?
+  operatingHours String?
+  currency       String   @default("INR")
+  currencySymbol String   @default("₹")
+  taxRate        Float    @default(0)
+  taxName        String   @default("GST")
+  isOnboarded    Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+}
