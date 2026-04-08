@@ -1,20 +1,47 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Parse date range from query params
+    const { searchParams } = new URL(request.url);
+    const range = searchParams.get("range") || "7d";
+
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    // Determine chart date range
+    let chartStart: Date;
+    let chartDays: number;
+    switch (range) {
+      case "today":
+        chartStart = todayStart;
+        chartDays = 1;
+        break;
+      case "30d":
+        chartStart = new Date(now);
+        chartStart.setDate(chartStart.getDate() - 29);
+        chartStart.setHours(0, 0, 0, 0);
+        chartDays = 30;
+        break;
+      case "7d":
+      default:
+        chartStart = new Date(now);
+        chartStart.setDate(chartStart.getDate() - 6);
+        chartStart.setHours(0, 0, 0, 0);
+        chartDays = 7;
+        break;
+    }
 
     // Run all queries in parallel
     const [
@@ -27,15 +54,12 @@ export async function GET() {
       recentPatients,
       recentPrescriptions,
     ] = await Promise.all([
-      // Total patients
       prisma.patient.count(),
 
-      // Today's prescriptions
       prisma.prescription.count({
         where: { createdAt: { gte: todayStart } },
       }),
 
-      // This month's revenue (sum of paid bills)
       prisma.bill.aggregate({
         _sum: { totalAmount: true },
         where: {
@@ -44,17 +68,14 @@ export async function GET() {
         },
       }),
 
-      // Pending bills count
       prisma.bill.count({
         where: { status: "PENDING" },
       }),
 
-      // Last month's patient count (for growth)
       prisma.patient.count({
         where: { createdAt: { lte: lastMonthEnd } },
       }),
 
-      // Last month's revenue (for growth)
       prisma.bill.aggregate({
         _sum: { totalAmount: true },
         where: {
@@ -63,7 +84,6 @@ export async function GET() {
         },
       }),
 
-      // Recent 5 patients
       prisma.patient.findMany({
         orderBy: { createdAt: "desc" },
         take: 5,
@@ -77,7 +97,6 @@ export async function GET() {
         },
       }),
 
-      // Recent 5 prescriptions with patient and doctor
       prisma.prescription.findMany({
         orderBy: { createdAt: "desc" },
         take: 5,
@@ -85,18 +104,32 @@ export async function GET() {
           id: true,
           diagnosis: true,
           createdAt: true,
-          patient: { select: { name: true } },
+          patient: { select: { id: true, name: true } },
           doctor: { select: { name: true } },
         },
       }),
     ]);
+
+    // Check which prescriptions have bills
+    const prescriptionIds = recentPrescriptions.map((p) => p.id);
+    const billsForPrescriptions = await prisma.bill.findMany({
+      where: { prescriptionId: { in: prescriptionIds } },
+      select: { prescriptionId: true },
+    });
+    const billedPrescriptionIds = new Set(
+      billsForPrescriptions.map((b) => b.prescriptionId).filter(Boolean)
+    );
+
+    const prescriptionsWithBillStatus = recentPrescriptions.map((rx) => ({
+      ...rx,
+      hasBill: billedPrescriptionIds.has(rx.id),
+    }));
 
     // Calculate growth percentages
     const monthRevenue = monthRevenueResult._sum.totalAmount ?? 0;
     const lastMonthRevenue = lastMonthRevenueResult._sum.totalAmount ?? 0;
 
     const thisMonthNewPatients = totalPatients - lastMonthPatients;
-    // Approximate last month new patients using total at end of last month vs month before
     const patientGrowth =
       lastMonthPatients > 0
         ? ((thisMonthNewPatients / lastMonthPatients) * 100)
@@ -107,15 +140,11 @@ export async function GET() {
         ? (((monthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100)
         : 0;
 
-    // Last 7 days revenue data
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-
+    // Revenue data for chart based on selected range
     const revenueByDay = await prisma.bill.findMany({
       where: {
         status: "PAID",
-        createdAt: { gte: sevenDaysAgo },
+        createdAt: { gte: chartStart },
       },
       select: {
         totalAmount: true,
@@ -125,8 +154,8 @@ export async function GET() {
 
     // Group revenue by day
     const revenueMap = new Map<string, number>();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(sevenDaysAgo);
+    for (let i = 0; i < chartDays; i++) {
+      const d = new Date(chartStart);
       d.setDate(d.getDate() + i);
       const key = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
       revenueMap.set(key, 0);
@@ -156,7 +185,7 @@ export async function GET() {
       },
       revenueData,
       recentPatients,
-      recentPrescriptions,
+      recentPrescriptions: prescriptionsWithBillStatus,
     });
   } catch (error) {
     console.error("Dashboard API error:", error);

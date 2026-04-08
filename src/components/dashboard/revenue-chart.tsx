@@ -8,12 +8,26 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Label,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
 interface RevenueChartProps {
   data: Array<{ date: string; amount: number }>;
+}
+
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="rounded-lg border bg-card px-3 py-2 shadow-md">
+      <p className="text-xs font-semibold text-foreground">{label}</p>
+      <p className="text-sm text-primary font-medium">
+        {formatCurrency(payload[0].value)}
+      </p>
+    </div>
+  );
 }
 
 export function RevenueChart({ data }: RevenueChartProps) {
@@ -27,7 +41,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={data}
-              margin={{ top: 5, right: 10, left: 10, bottom: 0 }}
+              margin={{ top: 5, right: 10, left: 20, bottom: 0 }}
             >
               <defs>
                 <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
@@ -49,17 +63,16 @@ export function RevenueChart({ data }: RevenueChartProps) {
                 axisLine={false}
                 tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
                 className="text-muted-foreground"
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "0.5rem",
-                  fontSize: "0.875rem",
-                }}
-                formatter={(value: number) => [formatCurrency(value), "Revenue"]}
-                labelStyle={{ fontWeight: 600 }}
-              />
+              >
+                <Label
+                  value="Revenue (₹)"
+                  angle={-90}
+                  position="insideLeft"
+                  offset={-5}
+                  style={{ fontSize: 12, fill: "hsl(var(--muted-foreground))", textAnchor: "middle" }}
+                />
+              </YAxis>
+              <Tooltip content={<CustomTooltip />} />
               <Area
                 type="monotone"
                 dataKey="amount"

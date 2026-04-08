@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Users, FileText, IndianRupee, Receipt, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -24,6 +25,7 @@ const cards = [
     iconColor: "text-blue-600",
     growthKey: "patientGrowth" as const,
     format: (val: number) => val.toLocaleString("en-IN"),
+    href: "/dashboard/patients",
   },
   {
     key: "todayPrescriptions" as const,
@@ -33,6 +35,7 @@ const cards = [
     iconColor: "text-teal-600",
     growthKey: null,
     format: (val: number) => val.toLocaleString("en-IN"),
+    href: "/dashboard/prescriptions",
   },
   {
     key: "monthRevenue" as const,
@@ -42,6 +45,7 @@ const cards = [
     iconColor: "text-green-600",
     growthKey: "revenueGrowth" as const,
     format: (val: number) => formatCurrency(val),
+    href: "/dashboard/billing",
   },
   {
     key: "pendingBills" as const,
@@ -51,12 +55,15 @@ const cards = [
     iconColor: "text-amber-600",
     growthKey: null,
     format: (val: number) => val.toLocaleString("en-IN"),
+    href: "/dashboard/billing?status=PENDING",
   },
 ];
 
 export function StatsCards({ stats }: StatsProps) {
+  const router = useRouter();
+
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card, index) => {
         const Icon = card.icon;
         const value = stats[card.key];
@@ -66,36 +73,37 @@ export function StatsCards({ stats }: StatsProps) {
           <Card
             key={card.key}
             className={cn(
-              "animate-in overflow-hidden transition-shadow hover:shadow-md",
+              "animate-in cursor-pointer overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5",
             )}
             style={{ animationDelay: `${index * 100}ms`, animationFillMode: "backwards" }}
+            onClick={() => router.push(card.href)}
           >
-            <CardContent className="p-6">
+            <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     {card.label}
                   </p>
-                  <p className="text-2xl font-bold tracking-tight">
+                  <p className="text-3xl font-bold tracking-tight">
                     {card.format(value)}
                   </p>
                 </div>
                 <div
                   className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-full",
+                    "flex h-11 w-11 items-center justify-center rounded-full",
                     card.bgColor,
                   )}
                 >
-                  <Icon className={cn("h-6 w-6", card.iconColor)} />
+                  <Icon className={cn("h-5 w-5", card.iconColor)} />
                 </div>
               </div>
 
               {growth !== null && (
-                <div className="mt-3 flex items-center gap-1 text-sm">
+                <div className="mt-2 flex items-center gap-1 text-sm">
                   {growth >= 0 ? (
-                    <TrendingUp className="h-4 w-4 text-green-500" />
+                    <TrendingUp className="h-3.5 w-3.5 text-green-500" />
                   ) : (
-                    <TrendingDown className="h-4 w-4 text-red-500" />
+                    <TrendingDown className="h-3.5 w-3.5 text-red-500" />
                   )}
                   <span
                     className={cn(
